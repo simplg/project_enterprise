@@ -281,7 +281,7 @@ def uniformize_ydb(n):
     else:
         return None
 
-df = pd.read_excel("project_enterprise/Data_Professional_Salary_Survey_Responses_1.xlsx")
+df = pd.read_excel("Data_Professional_Salary_Survey_Responses_1.xlsx")
 df.index += 1
 # On remplace les Not Asked par None
 df = df.apply(remove_not_asked, axis=1)
