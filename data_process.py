@@ -8,6 +8,9 @@ from pandas.core.frame import DataFrame
 from pandas.core.series import Series
 from sqlalchemy import create_engine
 
+# Dictionnaires associant les noms de chaque champs du fichier Excel
+# au nom de la table dans laquelle il sera extrapôlé et ses champs dans la bdd
+# Seulement les associations 1..n:1 (sauf pour PrimaryDatabase)
 KEYS_DICT: dict[str, dict[str, Union[str, Tuple[str,str]]]] = {
     "Certifications": {
         "tablename": "certification",
@@ -51,7 +54,9 @@ KEYS_DICT: dict[str, dict[str, Union[str, Tuple[str,str]]]] = {
     },
 }
 
-
+# Enumeration servant à remplacer les valeurs dans OtherDatabase et PrimaryDatabase
+# par des valeurs uniformizé (le nom de l'enum)
+# la valeur de l'enum étant un pattern regex pour le remplacement
 class EnumDatabases(Enum):
     MS_SQL_SERVER = 'microsoft sql server|ms sql server|ssrs'
     MS_APS = 'parallel data ?warehouse|pdw|aps|azure dw|azure data ?warehouse'
@@ -181,15 +186,31 @@ class EnumDatabases(Enum):
 
 
 def uniformize_database(db: str):
+    """Fonction qui retourne pour un nom de base de données, un index (int) correspondant à l'enum
+
+    Args:
+        db (str): Nom d'une base de données
+
+    Returns:
+        int: Index de l'enum
+    """
     for key, database in enumerate(EnumDatabases):
         if re.search('(?:' + database.value + ')',
                      db, flags=re.IGNORECASE) or database.value.find(db) != -1:
             return key + 1
     # to check what was missed
-    print(db)
+    # print(db)
     return len(EnumDatabases)
 
 def remove_not_asked(ligne):
+    """Remplace les Not Asked par None
+
+    Args:
+        ligne (Series): Ligne a remplacer dans le dataframe
+
+    Returns:
+        Series: Retourne la ligne remplacée
+    """
     for key, col in enumerate(ligne):
         if col == "Not Asked":
             ligne[key] = None
@@ -197,7 +218,17 @@ def remove_not_asked(ligne):
 
 
 def export_to_table(data: Series,
-                    row_names: Tuple[str, str]) -> Tuple[Series, DataFrame]:
+                    row_names: Tuple[str, str]) -> Tuple[DataFrame, DataFrame]:
+    """Exporte une colonne du dataframe avec une table d'association 1..n:1
+
+    Args:
+        data (Series): La colonne du dataframe a extraire
+        row_names (Tuple[str, str]): Un tuple des noms que prennent les champs id et valeurs dans la nouvelle table
+
+    Returns:
+        Tuple[DataFrame, DataFrame]: Retourne un tuple de dataframe, le premier correspondant à la nouvelle table et
+        et le deuxième correspondant au dataframe original modifié  
+    """
     id, name = row_names
     data = data.dropna().rename(name)
     unique_values = pd.DataFrame(data.drop_duplicates())
@@ -207,6 +238,14 @@ def export_to_table(data: Series,
         unique_values[name] == x][0] if x is not None else x)
 
 def extract_tasks(data: Series):
+    """Extrait les taches réalisés du fichier excel dans une table d'association 1..n:1..n
+
+    Args:
+        data (Series): La colonne à extraire
+
+    Returns:
+        Tuple[DataFrame, DataFrame]: Un tuple correspondans à une table task et une table task_performed
+    """
     data = data.dropna().apply(lambda x: x.split(', '))
     unique_task = pd.DataFrame(set([v for d in data for v in d]), columns=["tas_name"]).rename_axis(index="tas_id")
     unique_task.index += 1
@@ -217,6 +256,15 @@ def extract_tasks(data: Series):
     return unique_task, pd.DataFrame(tasks_performed)
 
 def extract_jobs(data: Series, unique_jobs):
+    """Extrait les métiers du fichier excel
+
+    Args:
+        data (Series): La colonne à extraire
+        unique_jobs (DataFrame): Les métiers uniques présents dans la table job 
+
+    Returns:
+        DataFrame: Un dataframe correpondant à la table other_jobs 
+    """
     unique_jobs_with_comma = unique_jobs[unique_jobs['job_name'].str.find(',') != -1]
     other_jobs = []
     for i, job in unique_jobs_with_comma["job_name"].iteritems():
@@ -227,6 +275,14 @@ def extract_jobs(data: Series, unique_jobs):
     return pd.DataFrame(other_jobs)
 
 def extract_other_database(data: Series):
+    """Extrait les autres base de données utilisés du fichier excel
+
+    Args:
+        data (Series): La colonne à extraire
+
+    Returns:
+        DataFrame: Retourne un dataframe correspondant à la table other_database
+    """
     other_databases_filtered = data.dropna().astype(str).apply(
     lambda x: re.split(r'(?:[-/,]| and )', x.lower()))
     other_database = []
@@ -243,6 +299,14 @@ def extract_other_database(data: Series):
     return pd.DataFrame(other_database)
 
 def get_gender(gender):
+    """Retourne la valeur de l'enum genre pour un genre donné
+
+    Args:
+        gender (Gender): Un élément de l'énumération genre
+
+    Returns:
+        str: La valeur associée à l'énumériation genre dans la bdd
+    """
     if gender == Gender.male:
         return 'male'
     elif gender == Gender.female:
@@ -254,6 +318,14 @@ def get_gender(gender):
     return None
 
 def cmp_to_int(n):
+    """Converti le nombre d'employé en valeur exploitable, certains sont des intervalles dans le fichier excel
+
+    Args:
+        n (str | int): Le nombre d'employés dans l'entreprise
+
+    Returns:
+        int: Le nombre d'employés uniformisé
+    """
     if isinstance(n, int) or n is None:
         return n
     if n.isnumeric():
@@ -263,6 +335,14 @@ def cmp_to_int(n):
         return int(match.group(1))
 
 def telecommute_to_int(n):
+    """Converti le champs telecommute en int
+
+    Args:
+        n (str | int): La fréquence de télécommute
+
+    Returns:
+        int: Une fréquence converti en int
+    """
     if isinstance(n, int) or n is None:
         return n
     if n.isnumeric():
@@ -273,6 +353,14 @@ def telecommute_to_int(n):
         return 5
 
 def uniformize_ydb(n):
+    """Uniformise le nombre d'années passé à utiliser une bdd
+
+    Args:
+        n (int): Le nombre d'année ou l'année à laquelle on a commencé à utiliser la bdd
+
+    Returns:
+        int: Le nombre d'années
+    """
     current_year = datetime.now().year
     if n > 1900 and n <= current_year:
         return current_year - n
