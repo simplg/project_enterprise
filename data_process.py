@@ -52,6 +52,10 @@ KEYS_DICT: dict[str, dict[str, Union[str, Tuple[str,str]]]] = {
         "tablename": "job",
         "rows": ("job_id", "job_name")
     },
+    "PopulationOfLargestCityWithin20Miles": {
+        "tablename": "largest_city",
+        "rows": ("pop_id", "pop_name")
+    },
 }
 
 # Enumeration servant à remplacer les valeurs dans OtherDatabase et PrimaryDatabase
