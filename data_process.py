@@ -186,6 +186,7 @@ class EnumDatabases(Enum):
     IDMS = 'idms'
     SAS = 'sas'
     DBASE = 'dbase'
+    POWER_BI = 'power'
     OTHER = 'other'
 
 
@@ -431,7 +432,7 @@ with db.connect() as connexion:
         sondage_item["gender"] = sondage_item["gender"].apply(get_gender)
         sondage_item["company_employee"] = sondage_item["company_employee"].apply(cmp_to_int)
         sondage_item["telecommute"] = sondage_item["telecommute"].apply(telecommute_to_int)
-        sondage_item["years_with_db"] = sondage_item["years_with_db"] .apply(uniformize_ydb)
+        sondage_item["years_with_db"] = sondage_item["years_with_db"].apply(uniformize_ydb)
 
         sondage_item = sondage_item.rename_axis(index="sgi_id")
         sondage_item.to_sql('sondage_item', if_exists='append', con=connexion)
